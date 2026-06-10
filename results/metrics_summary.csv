@@ -1,0 +1,5 @@
+label_set,labels,accuracy,macro_f1
+canonical,World | Sports | Business | Sci/Tech,0.678,0.6544760521227904
+natural,world news | sports | business | science and technology,0.672,0.6455977531975344
+synonyms,international affairs | athletics | finance and markets | technology,0.664,0.6625034684425093
+terse,politics | sports | economy | science,0.712,0.6890966588949065

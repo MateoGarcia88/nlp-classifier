@@ -1,0 +1,2 @@
+model,accuracy,macro_f1,f1_World,f1_Sports,f1_Business,f1_Sci/Tech
+TF-IDF + LogReg (trained on 8000),0.854,0.8545572483035448,0.8559322033898306,0.952,0.8307692307692308,0.7795275590551181

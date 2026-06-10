@@ -1,0 +1,41 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# ---- Virtual environments ----
+.venv/
+venv/
+env/
+ENV/
+
+# ---- ML / HuggingFace caches (large; regenerated automatically) ----
+# The ~1.6 GB bart-large-mnli download lives in the user HF cache, NOT in this
+# repo, so it is not committed. These cover the case where a cache lands locally.
+.cache/
+hf_cache/
+*.bin
+*.safetensors
+*.pt
+*.pth
+
+# ---- Gradio runtime artifacts ----
+.gradio/
+flagged/
+
+# ---- IDE / OS ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- Generated project artifacts ----
+# Kept IN the repo by default (small, ~1 MB, and they ARE the deliverable so
+# graders see figures + FINDINGS without a 20-min rerun).
+# Uncomment to ship a code-only repo instead:
+# data/
+# results/
+# figures/
