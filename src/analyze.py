@@ -1,10 +1,10 @@
-"""Steps 4-6 of the trail: core metrics, figures, per-class error analysis,
-wording-sensitivity aggregation, and a markdown findings dump.
+"""Pasos 4-6 del recorrido: metricas base, figuras, analisis de error por clase,
+agregacion de la sensibilidad a la redaccion y un volcado de hallazgos en markdown.
 
-Reads the prediction CSVs produced by run_zeroshot.py. Run that first
-(ideally `python run_zeroshot.py --all`) plus baseline.py.
+Lee los CSV de predicciones que produce run_zeroshot.py. Hay que correr ese primero
+(idealmente `python run_zeroshot.py --all`) y tambien baseline.py.
 
-Produces:
+Produce:
     figures/confusion_matrix.png
     figures/per_class_f1.png
     figures/wording_sensitivity.png
@@ -14,7 +14,7 @@ Produces:
 import numpy as np
 import pandas as pd
 import matplotlib
-matplotlib.use("Agg")
+matplotlib.use("Agg")  # backend sin ventana: solo guarda PNG a disco
 import matplotlib.pyplot as plt
 from sklearn.metrics import (
     accuracy_score, f1_score, recall_score, confusion_matrix,
@@ -27,14 +27,17 @@ from config import (
 
 
 def load_preds(key):
+    # Carga el CSV de un conjunto; devuelve None si no existe (permite corridas parciales).
     path = RESULTS_DIR / f"preds_{key}.csv"
     if not path.exists():
         return None
     return pd.read_csv(path)
 
 
-# ---------- core metrics ----------
+# ---------- metricas base ----------
 def core_metrics(df):
+    # Las tres metricas clave. macro_f1 promedia cada clase POR IGUAL, por eso detecta
+    # el colapso de una clase (p.ej. Sci/Tech) que la accuracy global esconde.
     y_true, y_pred = df["true_id"], df["pred_id"]
     return {
         "accuracy": accuracy_score(y_true, y_pred),
@@ -45,6 +48,7 @@ def core_metrics(df):
 
 
 def plot_confusion(df, out):
+    # Matriz de confusion: que clase verdadera (fila) se predice como cual (columna).
     cm = confusion_matrix(df["true_id"], df["pred_id"],
                           labels=range(len(CLASS_NAMES)))
     fig, ax = plt.subplots(figsize=(5.5, 5))
@@ -54,6 +58,7 @@ def plot_confusion(df, out):
     ax.set_xlabel("Predicted"); ax.set_ylabel("True")
     ax.set_title(f"Zero-shot confusion matrix\n(label set: '{PRIMARY_LABEL_SET}')")
     thresh = cm.max() / 2
+    # Escribe el numero en cada celda, con color de texto contrastante segun el fondo.
     for i in range(cm.shape[0]):
         for j in range(cm.shape[1]):
             ax.text(j, i, cm[i, j], ha="center", va="center",
@@ -64,6 +69,7 @@ def plot_confusion(df, out):
 
 
 def plot_per_class_f1(metrics, out):
+    # Barras del F1 por clase, con una linea horizontal en el macro-F1 como referencia.
     f1s = metrics["per_class_f1"]
     fig, ax = plt.subplots(figsize=(6, 4))
     bars = ax.bar(CLASS_NAMES, f1s, color="#4C72B0")
@@ -77,8 +83,10 @@ def plot_per_class_f1(metrics, out):
     fig.tight_layout(); fig.savefig(out, dpi=130); plt.close(fig)
 
 
-# ---------- wording sensitivity ----------
+# ---------- sensibilidad a la redaccion ----------
 def wording_table():
+    # Recorre los 4 conjuntos y arma la tabla accuracy/macro-F1 de cada uno.
+    # Devuelve tambien 'preds' (todos los DataFrames cargados) para reutilizarlos.
     rows = []
     preds = {}
     for key in LABEL_SETS:
@@ -98,7 +106,9 @@ def wording_table():
 
 
 def prediction_flips(preds):
-    """How many predictions change relative to the primary label set?"""
+    """Cuantas predicciones CAMBIAN respecto al conjunto primario. Esta metrica es la
+    que revela el hallazgo central: hasta 46% de predicciones cambian aunque la
+    accuracy global apenas se mueva."""
     if PRIMARY_LABEL_SET not in preds:
         return {}
     base = preds[PRIMARY_LABEL_SET]["pred_id"].values
@@ -111,9 +121,9 @@ def prediction_flips(preds):
 
 
 def per_class_across_wordings(preds, metric="recall"):
-    """For each label set, per-class metric. Returns a tidy DataFrame
-    (rows = label sets, cols = classes). Reveals that wording trades
-    performance *between* classes while leaving the aggregate ~flat."""
+    """Para cada conjunto, la metrica por clase. Devuelve una tabla ordenada
+    (filas = conjuntos, columnas = clases). EVIDENCIA del hallazgo estrella: la
+    redaccion intercambia rendimiento *entre* clases mientras el agregado queda plano."""
     fn = recall_score if metric == "recall" else \
         (lambda yt, yp, **k: f1_score(yt, yp, **k))
     rows = {}
@@ -125,6 +135,8 @@ def per_class_across_wordings(preds, metric="recall"):
 
 
 def plot_per_class_across_wordings(tbl, out, metric="recall"):
+    # Barras agrupadas que VISUALIZAN el intercambio entre clases. La formula
+    # x + (i - (n-1)/2)*w centra el grupo de barras alrededor de cada clase.
     fig, ax = plt.subplots(figsize=(8, 4.5))
     x = np.arange(len(CLASS_NAMES)); n = len(tbl); w = 0.8 / n
     for i, (key, row) in enumerate(tbl.iterrows()):
@@ -138,6 +150,7 @@ def plot_per_class_across_wordings(tbl, out, metric="recall"):
 
 
 def plot_wording(table, out):
+    # Barras accuracy vs macro-F1 por conjunto: la figura "estable en el agregado".
     fig, ax = plt.subplots(figsize=(7, 4))
     x = np.arange(len(table)); w = 0.38
     ax.bar(x - w/2, table["accuracy"], w, label="accuracy", color="#4C72B0")
@@ -152,8 +165,9 @@ def plot_wording(table, out):
     fig.tight_layout(); fig.savefig(out, dpi=130); plt.close(fig)
 
 
-# ---------- error analysis ----------
+# ---------- analisis de error ----------
 def top_confusions(df, k=3):
+    # Extrae las k mayores confusiones FUERA de la diagonal (p.ej. Sci/Tech -> Business).
     cm = confusion_matrix(df["true_id"], df["pred_id"],
                           labels=range(len(CLASS_NAMES)))
     pairs = []
@@ -166,6 +180,7 @@ def top_confusions(df, k=3):
 
 
 def main():
+    # Director de orquesta: carga datos, genera figuras y ensambla FINDINGS.md.
     primary = load_preds(PRIMARY_LABEL_SET)
     if primary is None:
         raise SystemExit(
@@ -181,12 +196,13 @@ def main():
     plot_wording(table, FIG_DIR / "wording_sensitivity.png")
     table.to_csv(RESULTS_DIR / "metrics_summary.csv", index=False)
 
+    # tabla + figura del recall por clase entre redacciones (la evidencia clave)
     recall_tbl = per_class_across_wordings(preds, "recall")
     plot_per_class_across_wordings(
         recall_tbl, FIG_DIR / "per_class_recall_by_wording.png", "recall")
     recall_tbl.to_csv(RESULTS_DIR / "per_class_recall_by_wording.csv")
 
-    # baseline (optional file)
+    # baseline (archivo opcional)
     base_path = RESULTS_DIR / "baseline_metrics.csv"
     baseline = pd.read_csv(base_path) if base_path.exists() else None
 
@@ -195,7 +211,7 @@ def main():
         primary["true_id"], primary["pred_id"],
         target_names=CLASS_NAMES, digits=3)
 
-    # ---- assemble FINDINGS.md ----
+    # ---- ensamblar FINDINGS.md (se concatena texto en la lista `lines`) ----
     lines = []
     lines.append("# Findings: Zero-Shot Text Classification with bart-large-mnli\n")
     lines.append(f"Dataset: AG News (test split), {len(primary)} examples, "
@@ -266,7 +282,7 @@ def main():
 
     (RESULTS_DIR / "FINDINGS.md").write_text("\n".join(lines), encoding="utf-8")
 
-    # console summary
+    # resumen en consola
     print(f"\n=== SUMMARY ({PRIMARY_LABEL_SET}) ===")
     print(f"accuracy={m['accuracy']:.3f}  macro_f1={m['macro_f1']:.3f}")
     print("\nwording sensitivity:")

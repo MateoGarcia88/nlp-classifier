@@ -1,16 +1,16 @@
-"""Step 3 of the trail: run zero-shot classification over the frozen subset.
+"""Paso 3 del recorrido: ejecutar la clasificacion zero-shot sobre el subconjunto.
 
-Reframes each candidate label as an entailment hypothesis via the HF
-`zero-shot-classification` pipeline (model: facebook/bart-large-mnli) and records,
-for every example, the predicted class and the full score vector over labels.
+Replantea cada etiqueta candidata como una hipotesis de entailment usando el pipeline
+`zero-shot-classification` de HF (modelo: facebook/bart-large-mnli) y registra, para
+cada ejemplo, la clase predicha y el vector completo de puntuaciones sobre las etiquetas.
 
-Reusable: pass a LABEL_SETS key. The same function powers both the primary run
-and the wording-sensitivity sweep, so all runs are strictly comparable.
+Reutilizable: se le pasa una clave de LABEL_SETS. La misma funcion alimenta tanto la
+corrida principal como el barrido de sensibilidad, asi todas las corridas son comparables.
 
-Usage:
-    python run_zeroshot.py                 # runs the PRIMARY_LABEL_SET
-    python run_zeroshot.py canonical       # runs a specific label set
-    python run_zeroshot.py --all           # runs every label set in LABEL_SETS
+Uso:
+    python run_zeroshot.py                 # corre el PRIMARY_LABEL_SET
+    python run_zeroshot.py canonical       # corre un conjunto de etiquetas concreto
+    python run_zeroshot.py --all           # corre todos los conjuntos de LABEL_SETS
 """
 import sys
 import time
@@ -24,25 +24,28 @@ from config import (
     SUBSET_CSV, RESULTS_DIR, CLASS_NAMES,
 )
 
-_PIPE = None  # lazily built, reused across label sets in one process
+_PIPE = None  # se construye de forma perezosa y se reutiliza entre conjuntos
 
 
 def get_pipe():
+    # Construye el pipeline UNA sola vez (patron singleton perezoso): cargar el
+    # modelo de 1.6 GB es caro, asi que se cachea para no repetirlo en cada conjunto.
     global _PIPE
     if _PIPE is None:
-        device = 0 if torch.cuda.is_available() else -1
+        device = 0 if torch.cuda.is_available() else -1   # 0 = GPU, -1 = CPU
         print(f"[zeroshot] loading {MODEL_NAME} (device={'cuda' if device==0 else 'cpu'})...")
         _PIPE = pipeline("zero-shot-classification", model=MODEL_NAME, device=device)
     return _PIPE
 
 
 def run_label_set(key: str, df: pd.DataFrame) -> pd.DataFrame:
-    """Classify every row of df under label set `key`. Returns a results frame
-    with the predicted *class id* (mapped back via position) and per-class scores."""
+    """Clasifica cada fila de df bajo el conjunto de etiquetas `key`. Devuelve un
+    DataFrame con el *id de clase* predicho (mapeado por posicion) y las puntuaciones
+    por clase. Esta es la funcion central del proyecto."""
     if key not in LABEL_SETS:
         raise KeyError(f"unknown label set '{key}'. options: {list(LABEL_SETS)}")
     labels = LABEL_SETS[key]
-    # position of each phrasing == its canonical class id
+    # La posicion de cada redaccion == su id de clase canonico (asi se mapea de vuelta).
     phrasing_to_id = {lab: i for i, lab in enumerate(labels)}
 
     pipe = get_pipe()
@@ -50,6 +53,8 @@ def run_label_set(key: str, df: pd.DataFrame) -> pd.DataFrame:
 
     print(f"[zeroshot] label set '{key}': {labels}")
     t0 = time.time()
+    # AQUI ocurre el zero-shot: cada texto se contrasta contra cada etiqueta-hipotesis.
+    # multi_label=False => las puntuaciones compiten entre si (softmax, suman 1).
     out = pipe(
         texts,
         candidate_labels=labels,
@@ -63,10 +68,11 @@ def run_label_set(key: str, df: pd.DataFrame) -> pd.DataFrame:
 
     rows = []
     for true_id, res in zip(df["label"].tolist(), out):
-        # pipeline returns labels sorted by score desc; rebuild a fixed-order vector
+        # El pipeline devuelve las etiquetas ORDENADAS por puntuacion descendente;
+        # reconstruimos un vector en orden fijo para que las columnas sean estables.
         score_by_phrasing = dict(zip(res["labels"], res["scores"]))
-        pred_phrasing = res["labels"][0]
-        pred_id = phrasing_to_id[pred_phrasing]
+        pred_phrasing = res["labels"][0]              # la etiqueta ganadora
+        pred_id = phrasing_to_id[pred_phrasing]       # de vuelta a id de clase
         row = {
             "true_id": true_id,
             "true_name": CLASS_NAMES[true_id],
@@ -75,7 +81,7 @@ def run_label_set(key: str, df: pd.DataFrame) -> pd.DataFrame:
             "top_phrasing": pred_phrasing,
             "top_score": res["scores"][0],
         }
-        # per-class scores in canonical order, with stable column names
+        # puntuaciones por clase en orden canonico, con nombres de columna estables
         for i, lab in enumerate(labels):
             row[f"score_{CLASS_NAMES[i]}"] = score_by_phrasing[lab]
         rows.append(row)
@@ -86,6 +92,7 @@ def run_label_set(key: str, df: pd.DataFrame) -> pd.DataFrame:
 
 
 def save(key: str, out_df: pd.DataFrame) -> None:
+    # Guarda el CSV de predicciones y calcula la accuracy al vuelo como control rapido.
     path = RESULTS_DIR / f"preds_{key}.csv"
     out_df.to_csv(path, index=False)
     acc = (out_df["true_id"] == out_df["pred_id"]).mean()
@@ -94,6 +101,7 @@ def save(key: str, out_df: pd.DataFrame) -> None:
 
 def main(argv) -> None:
     df = pd.read_csv(SUBSET_CSV)
+    # Selecciona que conjuntos correr segun los argumentos de linea de comandos.
     if "--all" in argv:
         keys = list(LABEL_SETS)
     elif len(argv) > 1:
