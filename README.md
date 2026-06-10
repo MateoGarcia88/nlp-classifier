@@ -92,6 +92,28 @@ Type any text, load or edit the candidate labels and the hypothesis template, an
 see the predicted class plus a confidence score per label. Editing the labels live is
 a hands-on demo of the wording-sensitivity finding.
 
+## Run with Docker
+
+CPU-only image; the Gradio demo is the default command.
+
+```bash
+docker compose up --build      # then open http://localhost:7860
+```
+
+The ~1.6 GB model downloads on first run and is cached in a named volume, so later
+starts are fast. To run the pipeline scripts inside the container instead of the UI:
+
+```bash
+docker compose run --rm app python prepare_data.py
+docker compose run --rm app python run_zeroshot.py --all
+docker compose run --rm app python baseline.py
+docker compose run --rm app python analyze.py
+```
+
+Generated `data/`, `results/`, and `figures/` are mounted back to the host, so those
+artifacts appear in your working copy. (Plain Docker without Compose also works:
+`docker build -t nlp-zeroshot . && docker run -p 7860:7860 nlp-zeroshot`.)
+
 ## Layout
 
 | Path | What |

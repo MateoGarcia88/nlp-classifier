@@ -1,0 +1,19 @@
+# One-command run:  docker compose up --build
+# Then open http://localhost:7860
+services:
+  app:
+    build: .
+    ports:
+      - "7860:7860"
+    volumes:
+      # Persist the ~1.6 GB HuggingFace model cache across runs so it downloads
+      # only once. Remove this line to re-download on every fresh container.
+      - hf-cache:/root/.cache/huggingface
+      # Persist generated artifacts (data/results/figures) back to the host so
+      # pipeline runs are visible outside the container. Comment out if unwanted.
+      - ./data:/app/data
+      - ./results:/app/results
+      - ./figures:/app/figures
+
+volumes:
+  hf-cache:

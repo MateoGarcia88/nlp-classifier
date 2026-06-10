@@ -31,7 +31,7 @@ SUBSET_CSV = DATA_DIR / "agnews_subset.csv"
 # Este orden es el "contrato" que conecta cada redaccion con su clase verdadera.
 CLASS_NAMES = ["World", "Sports", "Business", "Sci/Tech"]
 
-# --- Conjuntos de etiquetas para el experimento de sensibilidad a la redaccion ---
+# Conjuntos de etiquetas para el experimento de sensibilidad a la redaccion ---
 # clave -> lista de 4 etiquetas candidatas (en orden canonico de clase).
 # La plantilla de hipotesis se mantiene FIJA ("This text is about {}.") para que lo
 # UNICO que varia entre estas corridas sea la propia redaccion de la etiqueta.
